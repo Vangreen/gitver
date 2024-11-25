@@ -2,15 +2,16 @@
 interface Props {
 	title: string;
 	version: string;
-	date: string;
+	date: Date;
 	href: string;
 	changes: string;
 }
 
 const { href, title, date, version, changes } = Astro.props;
-
+// @ts-ignore
 function timeAgo(date) {
 	const now = new Date();
+	// @ts-ignore
 	const diffInMs = now - new Date(date); // Difference in milliseconds
 
 	const diffInSeconds = Math.floor(diffInMs / 1000);

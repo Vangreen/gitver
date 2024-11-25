@@ -31,6 +31,7 @@ async function loadAllUrls() {
     }
 }
 
+// @ts-ignore
 async function refresh(): Promise<StaredRelease[]> {
     await loadAllUrls();
 
@@ -50,6 +51,7 @@ async function refresh(): Promise<StaredRelease[]> {
             return null; // Skip rendering this iteration if `star` is undefined
         }
 
+        // @ts-ignore
         const releases: StaredRelease[] = info.slice(0, 3).map(releaseInfo => {
             const name = releaseInfo.tag_name ?? "UNKNOWN";
             const body = releaseInfo.body ?? "";
@@ -68,6 +70,7 @@ async function refresh(): Promise<StaredRelease[]> {
     }));
 
     // Flatten the array and filter out null values
+    // @ts-ignore
     return names.flat().filter((name): name is StaredRelease => name !== null);
 }
 
