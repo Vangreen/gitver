@@ -1,0 +1,19 @@
+---
+---
+
+
+
+<button>Get greeting</button>
+
+<script>
+    import { actions } from 'astro:actions';
+
+    const button = document.querySelector('button');
+    button?.addEventListener('click', async () => {
+        // Show alert pop-up with greeting from action
+        await actions.getGreeting({ name: "Houston" });
+    })
+</script>
+
+<style>
+</style>
