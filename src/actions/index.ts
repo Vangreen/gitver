@@ -50,24 +50,25 @@ async function refresh(): Promise<StaredRelease[]> {
             return null; // Skip rendering this iteration if `star` is undefined
         }
 
-        const releaseInfo = info[0];
-        const name = releaseInfo.tag_name ?? "UNKNOWN";
-        const body = releaseInfo.body ?? "";
+        const releases: StaredRelease[] = info.slice(0, 3).map(releaseInfo => {
+            const name = releaseInfo.tag_name ?? "UNKNOWN";
+            const body = releaseInfo.body ?? "";
 
-        const r: StaredRelease = {
-            name: data.name,
-            version: name,
-            releaseUrl: releaseInfo.html_url,
-            avatarUrl: data.owner.avatar_url,
-            date: new Date(releaseInfo.published_at),
-            changes: body
-        };
+            return {
+                name: data.name,
+                version: name,
+                releaseUrl: releaseInfo.html_url,
+                avatarUrl: data.owner.avatar_url,
+                date: new Date(releaseInfo.published_at),
+                changes: body
+            };
+        });
 
-        return r;
+        return releases;
     }));
 
-    // Filter out null values
-    return names.filter((name): name is StaredRelease => name !== null);
+    // Flatten the array and filter out null values
+    return names.flat().filter((name): name is StaredRelease => name !== null);
 }
 
 export const server = {
