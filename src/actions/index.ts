@@ -75,23 +75,11 @@ async function refresh(): Promise<StaredRelease[]> {
 }
 
 export const server = {
-
-
-    getGreeting: defineAction({
+    getStarredReleases: defineAction({
         handler: async (input) => {
-            console.log("DELETE")
             await db.delete(StaredRelease).all();
-            const comments = await db.select().from(StaredRelease);
-            const test = await refresh();
-            console.log("START")
-            test.map(async (r) => {
-                if (r != null) {
-                    console.log(r)
-                    await db.insert(StaredRelease).values(r);
-                }
-            })
-            console.log("STOP")
-            return `Hello, ${input.name}!`
+            const data = await refresh();
+            await db.insert(StaredRelease).values(data);
         }
     })
 }

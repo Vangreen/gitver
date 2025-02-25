@@ -6,13 +6,14 @@ import { db, StaredRelease, desc } from 'astro:db';
 
 const starredReleases = await db.select()
     .from(StaredRelease)
+    .limit(200)
     .orderBy(desc(StaredRelease.date));
 ---
 
 <Layout title="Welcome to GitVer.">
     <main>
-        <h1>Welcome to <span class="text-gradient">GitVer</span></h1>
-        <Refresh/>
+        <h1>Welcome to <span class="text-gradient">GitVer</span>        <Refresh/></h1>
+
         <ul role="list" class="link-card-grid">
             {starredReleases.map((r) =>
                 <Card
@@ -21,6 +22,7 @@ const starredReleases = await db.select()
                         version= {r.version}
                         date= {r.date}
                         changes= {r.changes}
+                        avatarUrl = {r.avatarUrl}
                 />
             )
             }
