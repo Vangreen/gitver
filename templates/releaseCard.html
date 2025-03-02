@@ -1,0 +1,38 @@
+{{if .Releases}}
+<div class="timeline">
+    {{range .Releases}}
+    <div class="timeline-item">
+        <div class="timeline-marker">
+            <img src="{{.AvatarURL}}" alt="Logo" class="repo-logo">
+        </div>
+        <div class="timeline-content">
+            <span class="release-date">{{.PublishedTimeAgo}}</span>
+            <h2>{{.RepoName}}</h2>
+            <p class="release-info">
+                <a href="{{.URL}}" target="_blank">{{.ReleaseName}} ({{.TagName}})</a>
+
+            </p>
+            {{if .Changelog}}
+            <div class="changelog collapsed">
+                {{.Changelog}}
+            </div>
+            <button class="show-more-btn" onclick="toggleChangelog(this)">Show more</button>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{if gt .TotalPages 1}}
+<div class="pagination" style="text-align: center; margin-top: 1em;">
+    {{if gt .PrevPage 0}}
+    <button hx-get="/releases?page={{.PrevPage}}" hx-target="#releases" hx-swap="innerHTML">Previous</button>
+    {{end}}
+    <span>Page {{.CurrentPage}} of {{.TotalPages}}</span>
+    {{if gt .NextPage 0}}
+    <button hx-get="/releases?page={{.NextPage}}" hx-target="#releases" hx-swap="innerHTML">Next</button>
+    {{end}}
+</div>
+{{end}}
+{{else}}
+<p>No releases found.</p>
+{{end}}

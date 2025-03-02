@@ -1,0 +1,311 @@
+:root {
+    --bg-primary: #f5f5f7;
+    --bg-dark: #000000;
+    --text-primary: #1d1d1f;
+    --text-secondary: #86868b;
+    --accent: #0071e3;
+    --card-bg: rgba(255, 255, 255, 0.8);
+    --card-border: rgba(255, 255, 255, 0.4);
+    --card-shadow: rgba(0, 0, 0, 0.1);
+    --timeline-line: rgba(0, 0, 0, 0.1);
+    --border-radius: 12px;
+    --button-radius: 20px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background: var(--bg-primary) linear-gradient(135deg, #f5f5f7 0%, #e3e3e5 100%);
+}
+
+h1 {
+    font-size: 38px;
+    font-weight: 600;
+    text-align: center;
+    margin: 40px 0;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+.app-container {
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.refresh-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 30px;
+    gap: 16px;
+}
+
+.refresh-button {
+    padding: 10px 20px;
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--button-radius);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+}
+
+.refresh-button:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 113, 227, 0.4);
+}
+
+.refresh-button:active {
+    transform: scale(0.98);
+}
+
+.logout-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.2s ease;
+}
+
+.logout-link:hover {
+    color: var(--accent);
+}
+
+/* Spinner styles */
+.spinner {
+    border: 3px solid rgba(0, 113, 227, 0.1);
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: none;
+}
+
+.spinner.htmx-request {
+    display: inline-block;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Timeline styles */
+.timeline {
+    position: relative;
+    margin: 40px 0;
+}
+
+.timeline:before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--timeline-line);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 30px;
+    padding-left: 60px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: 12px;
+    top: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: 0 2px 8px var(--card-shadow);
+    overflow: hidden;
+    z-index: 2;
+}
+
+.repo-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.timeline-content {
+    background: var(--card-bg);
+    padding: 24px;
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--card-border);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.timeline-content:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+}
+
+.timeline-content h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.release-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.release-info a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.release-info a:hover {
+    text-decoration: underline;
+}
+
+.release-date {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.changelog {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background: rgba(245, 245, 247, 0.5);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.changelog.collapsed {
+    display: -webkit-box;
+    -webkit-line-clamp: 8;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.show-more-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 12px;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+
+.show-more-btn:hover {
+    color: #0051a3;
+}
+
+/* Login styles */
+.login-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 32px;
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--card-border);
+}
+
+.login-container h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.8);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input[type="text"]:focus, input[type="password"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+}
+
+button[type="submit"] {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    border: none;
+    color: white;
+    border-radius: var(--button-radius);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+}
+
+button[type="submit"]:hover {
+    background: #0062c2;
+    transform: translateY(-1px);
+}
+
+button[type="submit"]:active {
+    transform: scale(0.98);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #000000;
+        --text-primary: #f5f5f7;
+        --text-secondary: #86868b;
+        --card-bg: rgba(30, 30, 32, 0.8);
+        --card-border: rgba(60, 60, 65, 0.4);
+        --timeline-line: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+        background: linear-gradient(135deg, #1a1a1a 0%, #0c0c0c 100%);
+    }
+
+    .changelog {
+        background: rgba(30, 30, 32, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    input[type="text"], input[type="password"] {
+        background: rgba(30, 30, 32, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-primary);
+    }
+}

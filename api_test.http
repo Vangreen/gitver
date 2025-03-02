@@ -1,0 +1,3 @@
+GET https://api.github.com/user/starred
+Authorization: token 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
+Accept:application/vnd.github+json

@@ -1,11 +1,14 @@
-FROM node:lts-alpine AS runtime
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
+
 COPY . .
+RUN go mod download
 
-RUN npm install
-RUN npm run build
+RUN go build -o gitver .
 
-ENV HOST=0.0.0.0
-ENV PORT=4321
-EXPOSE 4321
-CMD node ./dist/server/entry.mjs
+FROM alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/gitver /app/gitver
+COPY templates/ templates/
+COPY static/ static/
+ENTRYPOINT ["/app/gitver"]

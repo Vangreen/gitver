@@ -1,9 +1,0 @@
-services:
-  gitver:
-    image: gitver
-    restart: always
-    ports:
-      - '4323:4321'
-    environment:
-      - GH_API_KEY=${GH_API_KEY}
-      - ASTRO_DATABASE_FILE=${ASTRO_DATABASE_FILE}

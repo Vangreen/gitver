@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Gitver</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+<!--    <link rel="icon" type="image/png" href="/static/favicon.png">-->
+</head>
+<body>
+<div class="login-container">
+    <h2>Sign In</h2>
+    {{if .Error}}
+    <p style="color:#ff3b30; margin-bottom:16px; text-align:center; font-size:14px;">{{.Error}}</p>
+    {{end}}
+    <form method="POST" action="/login">
+        <label>
+            <input type="text" name="username" placeholder="Username" required autocomplete="username">
+        </label>
+        <label>
+            <input type="password" name="password" placeholder="Password" required autocomplete="current-password">
+        </label>
+        <button type="submit">Sign In</button>
+    </form>
+</div>
+</body>
+</html>

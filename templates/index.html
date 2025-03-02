@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Latest Releases Timeline</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+<!--    <link rel="icon" type="image/png" href="/static/favicon.png">-->
+</head>
+<body>
+<div class="app-container">
+    <h1>Gitver</h1>
+
+    <div class="refresh-container">
+        <button class="refresh-button" hx-get="/refresh" hx-target="#releases" hx-swap="outerHTML" hx-indicator="#spinner">
+            Refresh Releases
+        </button>
+        <div id="spinner" class="spinner"></div>
+        <a href="/logout" class="logout-link">Logout</a>
+    </div>
+
+    <div id="releases" hx-get="/releases" hx-trigger="load" hx-swap="innerHTML">
+        <div>
+            Loading releases...
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleChangelog(btn) {
+        const container = btn.previousElementSibling;
+        if (container.classList.contains('collapsed')) {
+            container.classList.remove('collapsed');
+            btn.textContent = "Show less";
+        } else {
+            container.classList.add('collapsed');
+            btn.textContent = "Show more";
+        }
+    }
+</script>
+</body>
+</html>
