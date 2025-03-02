@@ -1,0 +1,10 @@
+services:
+  gitver:
+    image: gitvergo:latest
+    restart: always
+    ports:
+      - '4321:8080'
+    environment:
+      - GITHUB_API_KEY=${GITHUB_API_KEY}
+      - APP_USER=${APP_USER}
+      - APP_PASSWORD=${APP_PASSWORD}
