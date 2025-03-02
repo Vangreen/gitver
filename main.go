@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"github.com/dgraph-io/badger/v4"
 	"gitvergo/githubapi"
@@ -14,23 +15,25 @@ import (
 	"time"
 )
 
-var (
-	indexTpl    *template.Template
-	releasesTpl *template.Template
-	loginTpl    *template.Template
+//go:embed templates/* static/styles.css
+var assetFS embed.FS
 
+var (
 	githubToken string
 	appUser     string
 	appPassword string
 
-	db *badger.DB
+	db   *badger.DB
+	tmpl *template.Template
 )
 
 func init() {
-	// Parse templates
-	indexTpl = template.Must(template.ParseFiles("templates/index.html"))
-	releasesTpl = template.Must(template.ParseFiles("templates/releaseCard.html"))
-	loginTpl = template.Must(template.ParseFiles("templates/login.html"))
+	// Parse all templates and static
+	var err error
+	tmpl, err = template.ParseFS(assetFS, "templates/*")
+	if err != nil {
+		log.Fatalf("Failed to parse templates: %v", err)
+	}
 
 	// Read environment variables
 	githubToken = os.Getenv("GITHUB_API_KEY")
@@ -52,7 +55,8 @@ func main() {
 		log.Fatalf("Failed to open Badger DB: %v", err)
 	}
 	defer db.Close()
-
+	// static files (css, js etc.)
+	http.Handle("/static/", http.FileServer(http.FS(assetFS)))
 	// Public endpoints.
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/logout", logoutHandler)
@@ -61,8 +65,7 @@ func main() {
 	http.Handle("/", authenticate(http.HandlerFunc(indexHandler)))
 	http.Handle("/releases", authenticate(http.HandlerFunc(releasesHandler)))
 	http.Handle("/refresh", authenticate(http.HandlerFunc(refreshHandler)))
-	// static
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -74,7 +77,7 @@ func main() {
 // loginHandler handles both GET (display form) and POST (process login).
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		err := loginTpl.Execute(w, nil)
+		err := tmpl.ExecuteTemplate(w, "login.html", nil)
 		if err != nil {
 			http.Error(w, "Failed to execute login template", http.StatusNotFound)
 		}
@@ -118,7 +121,7 @@ func loginPostHandler(w http.ResponseWriter, r *http.Request) {
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	} else {
-		err := loginTpl.Execute(w, struct{ Error string }{Error: "Invalid credentials"})
+		err := tmpl.ExecuteTemplate(w, "login.html", struct{ Error string }{Error: "Invalid credentials"})
 		if err != nil {
 			return
 		}
@@ -158,7 +161,7 @@ func authenticate(next http.Handler) http.Handler {
 
 // indexHandler serves the main page.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if err := indexTpl.Execute(w, nil); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "index.html", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -214,7 +217,7 @@ func releasesHandler(w http.ResponseWriter, r *http.Request) {
 		NextPage:    nextPage,
 	}
 
-	if err := releasesTpl.Execute(w, paginated); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "releaseCard.html", paginated); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -230,7 +233,7 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to store releases: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if err := releasesTpl.Execute(w, releases); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "releaseCard.html", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
