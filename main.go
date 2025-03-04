@@ -179,6 +179,10 @@ func releasesHandler(w http.ResponseWriter, r *http.Request) {
 		_ = repository.StoreReleases(releases, db)
 	}
 
+	for i := range releases {
+		releases[i].PublishedTimeAgo = timeAgo(releases[i].PublishedAt)
+	}
+
 	// Pagination: default 10 releases per page.
 	pageStr := r.URL.Query().Get("page")
 	page := 1
@@ -235,5 +239,23 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := tmpl.ExecuteTemplate(w, "releaseCard.html", nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func timeAgo(t time.Time) string {
+	duration := time.Since(t)
+	seconds := int(duration.Seconds())
+
+	switch {
+	case seconds < 60:
+		return fmt.Sprintf("%d seconds ago", seconds)
+	case seconds < 3600:
+		return fmt.Sprintf("%d minutes ago", seconds/60)
+	case seconds < 86400:
+		return fmt.Sprintf("%d hours ago", seconds/3600)
+	case seconds < 604800:
+		return fmt.Sprintf("%d days ago", seconds/86400)
+	default:
+		return fmt.Sprintf("%d weeks ago", seconds/604800)
 	}
 }
