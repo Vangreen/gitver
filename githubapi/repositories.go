@@ -2,6 +2,7 @@ package githubapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -26,6 +27,7 @@ func fetchStarredRepos(page int, githubToken string) ([]GitHubRepo, error) {
 
 	var repos []GitHubRepo
 	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	return repos, nil

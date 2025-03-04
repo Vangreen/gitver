@@ -70,7 +70,7 @@ func LoadReleases(githubToken string) ([]repository.Release, error) {
 					TagName:          r.TagName,
 					ReleaseName:      r.Name,
 					PublishedAt:      r.PublishedAt,
-					PublishedTimeAgo: timeAgo(r.PublishedAt),
+					PublishedTimeAgo: "",
 					URL:              r.HTMLURL,
 					AvatarURL:        repo.Owner.AvatarURL,
 					Changelog:        template.HTML(r.Body),
@@ -144,22 +144,4 @@ func fetchReleases(owner, repo string, githubToken string) ([]GitHubRelease, err
 	}
 
 	return releases, nil
-}
-
-func timeAgo(t time.Time) string {
-	duration := time.Since(t)
-	seconds := int(duration.Seconds())
-
-	switch {
-	case seconds < 60:
-		return fmt.Sprintf("%d seconds ago", seconds)
-	case seconds < 3600:
-		return fmt.Sprintf("%d minutes ago", seconds/60)
-	case seconds < 86400:
-		return fmt.Sprintf("%d hours ago", seconds/3600)
-	case seconds < 604800:
-		return fmt.Sprintf("%d days ago", seconds/86400)
-	default:
-		return fmt.Sprintf("%d weeks ago", seconds/604800)
-	}
 }
