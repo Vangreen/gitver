@@ -12,10 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
 )
 
 func TestNormalizeRepo(t *testing.T) {
@@ -70,13 +66,13 @@ func TestTimeAgo(t *testing.T) {
 }
 
 type countingMarkdown struct {
-	goldmark.Markdown
+	markdownConverter
 	calls int
 }
 
-func (markdown *countingMarkdown) Convert(source []byte, writer io.Writer, options ...parser.ParseOption) error {
+func (markdown *countingMarkdown) Convert(source []byte, writer io.Writer) error {
 	markdown.calls++
-	return markdown.Markdown.Convert(source, writer, options...)
+	return markdown.markdownConverter.Convert(source, writer)
 }
 
 func TestReleaseActionMenuOverridesOatDisclosureStyles(t *testing.T) {
@@ -130,7 +126,7 @@ func TestReleaseTimeline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			markdown := &countingMarkdown{Markdown: goldmark.New(goldmark.WithExtensions(extension.GFM))}
+			markdown := &countingMarkdown{markdownConverter: newMarkdown()}
 			application := &app{tmpl: tmpl, markdown: markdown, csrfToken: "test-csrf"}
 			for index := range 45 {
 				body := "## Changes\n\n- **Fixed** a bug\n\n<script>alert('unsafe')</script>"
