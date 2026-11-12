@@ -1,0 +1,13 @@
+{{define "excluded-content"}}
+<section class="simple-head"><div><h1>Excluded</h1><p class="subtitle">Repositories hidden from the release list.</p></div></section>
+<div class="compact-stats"><span><b>{{.ExcludedCount}}</b> excluded repositories</span><span>Restore a repository to check it on the next scan.</span></div>
+{{if .Error}}<div class="notice error dismissible"><span>{{.Error}}</span><form action="/dismiss-error" method="post" hx-post="/dismiss-error" hx-target="closest .notice" hx-swap="delete"><input type="hidden" name="csrf" value="{{.CSRFToken}}"><input type="hidden" name="next" value="/excluded"><button type="submit" aria-label="Dismiss message" title="Dismiss">×</button></form></div>{{end}}
+<form class="exclude-form" action="/exclusions" method="post" hx-post="/exclusions" hx-target="main" hx-select="main" hx-swap="innerHTML">
+  <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+  <input name="repo" required placeholder="owner/repository" aria-label="Repository to exclude">
+  <button type="submit">Exclude</button>
+</form>
+{{if .Exclusions}}<div class="exclude-list">
+  {{range .Exclusions}}<div class="exclude-row"><div><strong>{{.Repo}}</strong><span>{{reasonLabel .Reason}}</span></div><form action="/exclusions/remove" method="post" hx-post="/exclusions/remove" hx-target="closest .exclude-row" hx-swap="delete"><input type="hidden" name="csrf" value="{{$.CSRFToken}}"><input type="hidden" name="repo" value="{{.Repo}}"><button type="submit">Restore</button></form></div>{{end}}
+</div>{{else}}<section class="empty-state small"><h2>No excluded repositories</h2></section>{{end}}
+{{end}}

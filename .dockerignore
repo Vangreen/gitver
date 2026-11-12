@@ -1,7 +1,0 @@
-.env
-.gitignore
-*.http
-*.iml
-.idea
-.git
-images
