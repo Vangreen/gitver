@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -20,9 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/v2/extension"
+	"github.com/yuin/goldmark/v2/parser"
+	"github.com/yuin/goldmark/v2/renderer"
+	"github.com/yuin/goldmark/v2/renderer/html"
 )
 
 const (
@@ -73,13 +75,37 @@ type app struct {
 	cachePath      string
 	client         *http.Client
 	tmpl           *template.Template
-	markdown       goldmark.Markdown
+	markdown       markdownConverter
 	csrfToken      string
 	exclusionEdits map[string]bool
 	githubMu       sync.Mutex
 	pauseUntil     time.Time
 	primaryPauses  map[string]time.Time
 	metrics        scanMetrics
+}
+
+type markdownConverter interface {
+	Convert([]byte, io.Writer) error
+}
+
+type goldmarkV2 struct {
+	parser   parser.Parser
+	renderer renderer.Renderer[io.Writer]
+}
+
+func newMarkdown() markdownConverter {
+	return goldmarkV2{
+		parser: parser.New(
+			parser.WithAutoHeadingID(),
+			parser.WithExtensions(extension.NewGFMParser()),
+		),
+		renderer: html.New(html.WithExtensions(extension.NewGFMHTMLRenderer())),
+	}
+}
+
+func (m goldmarkV2) Convert(source []byte, writer io.Writer) error {
+	document := m.parser.Parse(source)
+	return m.renderer.Render(writer, source, document)
 }
 
 type repository struct {
@@ -178,10 +204,7 @@ func main() {
 		cachePath: filepath.Join(envOr("DATA_DIR", "data"), "releases.json"),
 		client:    &http.Client{Timeout: 45 * time.Second},
 		tmpl:      tmpl,
-		markdown: goldmark.New(
-			goldmark.WithExtensions(extension.GFM),
-			goldmark.WithParserOptions(parser.WithAutoHeadingID()),
-		),
+		markdown:  newMarkdown(),
 		csrfToken: randomToken(),
 	}
 	if err := a.loadCache(); err != nil && !errors.Is(err, os.ErrNotExist) {
