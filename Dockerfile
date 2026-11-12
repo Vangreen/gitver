@@ -8,6 +8,7 @@ COPY static ./static
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /gitver .
 
 FROM scratch
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /gitver /gitver
 VOLUME ["/data"]
 EXPOSE 8090
