@@ -1,7 +1,6 @@
 services:
   gitver:
-    build: .
-    image: gitver:latest
+    image: ${GITVER_IMAGE:-ghcr.io/vangreen/gitver:latest}
     ports:
       - "${PORT:-8090}:8090"
     environment:
