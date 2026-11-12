@@ -47,11 +47,10 @@ document.addEventListener("submit", event => {
 });
 
 function showLoadError(event) {
-  const loader = event.detail.elt?.closest(".load-more");
+  const loader = event.detail.ctx?.sourceElement?.closest(".load-more");
   const message = loader?.querySelector(".load-error");
   if (message) message.hidden = false;
 }
 
-document.body.addEventListener("htmx:responseError", showLoadError);
-document.body.addEventListener("htmx:sendError", showLoadError);
-document.body.addEventListener("htmx:timeout", showLoadError);
+document.body.addEventListener("htmx:response:error", showLoadError);
+document.body.addEventListener("htmx:error", showLoadError);
