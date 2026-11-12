@@ -16,15 +16,22 @@ The CSS, JavaScript and HTML templates are embedded in the Go binary. HTMX is in
 ## Run with Docker Compose
 
 1. Copy `.env.example` to `.env` and add a GitHub token. Read-only access to public repositories is enough for public stars.
-2. Start the app:
+2. Pull and start the published image:
 
    ```sh
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d
    ```
 
 3. Open [http://localhost:8090](http://localhost:8090) and choose **Scan**.
 
 Scans run only when started from the app. Releases from the last 14 days and repository exclusions are saved in `./data/releases.json`.
+
+The image is published to `ghcr.io/vangreen/gitver` after changes reach `main`. A push to `main` updates the `latest` and `main` tags; Git tags such as `v1.2.3` publish version tags. The workflow builds images for `linux/amd64` and `linux/arm64`.
+
+New GHCR packages are private by default. To pull without logging in on your NAS, make the `gitver` package public in the repository's **Packages** settings after the first successful build. Otherwise, log in to `ghcr.io` on the NAS using a GitHub token with `read:packages` access.
+
+To build locally, run `docker build -t gitver:local .`, then start Compose with `GITVER_IMAGE=gitver:local docker compose up -d`.
 
 ## Use
 
