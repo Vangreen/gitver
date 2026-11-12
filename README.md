@@ -13,6 +13,21 @@ The CSS, JavaScript and HTML templates are embedded in the Go binary. HTMX is in
   <img src="screenshots/releases-dark.png" alt="GitVer in dark mode" width="480">
 </p>
 
+## Container image
+
+Docker Compose uses `ghcr.io/vangreen/gitver:latest` by default and downloads it when needed. To pull it explicitly:
+
+```sh
+docker pull ghcr.io/vangreen/gitver:latest
+```
+
+To build the image yourself from the repository:
+
+```sh
+docker build -t gitver:local .
+GITVER_IMAGE=gitver:local docker compose up -d
+```
+
 ## Run with Docker Compose
 
 1. Copy `.env.example` to `.env` and add a GitHub token. Read-only access to public repositories is enough for public stars.
