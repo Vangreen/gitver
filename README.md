@@ -1,6 +1,6 @@
 # GitVer
 
-GitVer collects recent releases from your starred GitHub repositories in one place. It is a small Go web app with a simple interface and manual scans.
+GitVer collects recent releases from your starred GitHub repositories. It is a small Go web app; scans are started manually.
 
 The UI uses [Oat](https://oat.ink/) with a monochrome style inspired by [Concrete](https://concrete.style/). The focus is on a lightweight interface and a short path to the release notes.
 
@@ -13,37 +13,34 @@ The CSS, JavaScript and HTML templates are embedded in the Go binary. HTMX is in
   <img src="screenshots/releases-dark.png" alt="GitVer in dark mode" width="480">
 </p>
 
-## Container image
+## Run with Docker Compose
 
-Docker Compose uses `ghcr.io/vangreen/gitver:latest` by default and downloads it when needed. To pull it explicitly:
+Copy `.env.example` to `.env` and add a GitHub token. Read-only access to public repositories is enough for public stars. Then start the app:
+
+```sh
+docker compose up -d
+```
+
+Open [http://localhost:8090](http://localhost:8090) and choose **Scan**. Compose downloads `ghcr.io/vangreen/gitver:latest` if it is not already available.
+
+To pull the image explicitly:
 
 ```sh
 docker pull ghcr.io/vangreen/gitver:latest
 ```
 
-To build the image yourself from the repository:
+Or build it from the repository and run that image:
 
 ```sh
 docker build -t gitver:local .
 GITVER_IMAGE=gitver:local docker compose up -d
 ```
 
-## Run with Docker Compose
-
-1. Copy `.env.example` to `.env` and add a GitHub token. Read-only access to public repositories is enough for public stars.
-2. Start the app:
-
-   ```sh
-   docker compose up -d
-   ```
-
-3. Open [http://localhost:8090](http://localhost:8090) and choose **Scan**.
-
-Scans run only when started from the app. Releases from the last 14 days and repository exclusions are saved in `./data/releases.json`.
-
 ## Use
 
-Search the release list by repository, version, title, or release notes. Exclude a repository from its release menu, or restore it from **Excluded**. Repositories with no releases are checked again after seven days; manual exclusions stay in place until restored.
+Choose **Scan** to check your starred repositories. GitHub is contacted only during a scan. The app keeps releases from the last 14 days and saves them, along with repository exclusions, in `./data/releases.json`.
+
+Search by repository, version, title, or release notes. Exclude a repository from its release menu, or restore it from **Excluded**. Repositories with no releases are checked again after seven days; manual exclusions stay in place until restored.
 
 ## Configuration
 
@@ -53,7 +50,7 @@ Search the release list by repository, version, title, or release notes. Exclude
 | `PORT` | `8090` | Host port used by Docker Compose |
 | `DATA_DIR` | `data` | Directory for releases and exclusions |
 
-The app listens on port `8090` inside the container. `LISTEN_ADDR` can be set when running the binary directly.
+The app listens on port `8090` inside the container. `PORT` changes the host port in Docker Compose; it does not change the container port. When running the binary directly, use `LISTEN_ADDR` to change its listen address and `DATA_DIR` to change where it stores `releases.json`.
 
 ## Run locally
 
