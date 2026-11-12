@@ -1,25 +1,11 @@
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
 .env
-# jetbrains setting folder
+.env.*
+!.env.example
 .idea/
-.vscode/
-*.iml
+data/
+pb_data/
+pb_data_test/
+/gitver
+*.tar
+*.test
+coverage.out

@@ -1,10 +1,15 @@
 services:
   gitver:
-    image: gitvergo:latest
-    restart: always
+    build: .
+    image: gitver:latest
     ports:
-      - '4321:8080'
+      - "${PORT:-8090}:8090"
     environment:
-      - GITHUB_API_KEY=${GITHUB_API_KEY}
-      - APP_USER=${APP_USER}
-      - APP_PASSWORD=${APP_PASSWORD}
+      GITHUB_TOKEN: "${GITHUB_TOKEN:?Set GITHUB_TOKEN in .env}"
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

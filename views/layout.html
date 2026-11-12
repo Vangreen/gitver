@@ -1,0 +1,36 @@
+{{define "layout.html"}}<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Recent releases from starred GitHub repositories">
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
+  <title>GitVer</title>
+  <link rel="stylesheet" href="/static/oat.min.css">
+  <link rel="stylesheet" href="/static/oat-concrete.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="header-left">
+      <a class="brand" href="/" aria-label="GitVer home">gitver<span aria-hidden="true">.</span></a>
+      <nav class="tabs" aria-label="Main navigation">
+        <a href="/" {{if eq .Page "releases"}}class="active" aria-current="page"{{end}}>Releases</a>
+        <a href="/excluded" {{if eq .Page "excluded"}}class="active" aria-current="page"{{end}}>Excluded <span id="exclusion-count">{{.ExcludedCount}}</span></a>
+      </nav>
+    </div>
+    <div class="actions">
+      <span class="updated">{{.UpdatedAt}}</span>
+      <button class="icon-button" id="theme" type="button" aria-label="Toggle color theme">◐</button>
+      <form action="/refresh" method="post" hx-post="/refresh" hx-target="main" hx-select="main" hx-swap="innerHTML">
+        <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+        <button class="refresh" type="submit" {{if .IsSyncing}}disabled{{end}}><span class="refresh-icon {{if .IsSyncing}}spin{{end}}">↻</span>{{if .IsSyncing}}Scanning{{else}}Scan{{end}}</button>
+      </form>
+    </div>
+  </header>
+  <main>{{if eq .Page "excluded"}}{{template "excluded-content" .}}{{else}}{{template "releases-content" .}}{{end}}</main>
+</body>
+</html>{{end}}

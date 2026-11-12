@@ -1,0 +1,55 @@
+{{define "releases-content"}}
+<div id="release-page" hx-get="/?q={{.Query | urlquery}}" hx-trigger="repositoryExcluded from:body{{if .IsSyncing}}, every 2s{{end}}" hx-select="#release-page" hx-target="this" hx-swap="outerHTML">
+<section class="simple-head">
+  <div><p class="eyebrow">gitver.</p><h1 class="visually-hidden">Recent releases</h1></div>
+  <span class="window-label">LAST {{.WindowDays}} DAYS</span>
+</section>
+<div class="compact-stats"><span><b id="release-count">{{.ReleaseCount}}</b> {{if .Query}}matching {{end}}releases</span><span><b>{{.RepoCount}}</b> starred repositories</span></div>
+<form class="search" role="search" action="/" method="get" hx-get="/" hx-target="#release-page" hx-select="#release-page" hx-swap="outerHTML" hx-trigger="submit, input changed delay:300ms" hx-replace-url="true" hx-sync="this:replace"><span aria-hidden="true">⌕</span><input id="search" name="q" type="search" value="{{.Query}}" aria-label="Search all recent releases" placeholder="Search repositories, versions, or release notes…" autocomplete="off"><button class="search-submit" type="submit">Search</button></form>
+{{if .Error}}<div class="notice error dismissible"><span>{{.Error}}</span><form action="/dismiss-error" method="post" hx-post="/dismiss-error" hx-target="closest .notice" hx-swap="delete"><input type="hidden" name="csrf" value="{{.CSRFToken}}"><input type="hidden" name="next" value="/"><button type="submit" aria-label="Dismiss message" title="Dismiss">×</button></form></div>{{end}}
+{{if .IsSyncing}}<div class="notice"><span class="pulse"></span>{{if .Progress}}{{.Progress}}{{else}}Scanning…{{end}}</div>{{end}}
+
+{{if .Releases}}
+<div class="list-heading"><span>RECENT RELEASES</span><span>LAST {{.WindowDays}} DAYS</span></div>
+<section class="timeline" id="timeline">
+  {{template "release-batch" .}}
+</section>
+{{else}}<section class="empty-state"><span>✦</span><h2>{{if .Query}}No matching releases{{else}}No recent releases{{end}}</h2><p>{{if .Query}}Try another repository, version, or keyword. <a href="/">Clear search</a>{{else}}Scan your starred repositories to find every release from the last {{.WindowDays}} days.{{end}}</p></section>{{end}}
+</div>
+{{end}}
+
+{{define "release-batch"}}
+  {{range .Releases}}
+  <article class="release" data-repo="{{.Repo}}" data-search="{{.Repo}} {{.Version}} {{.Name}}">
+    <div class="card">
+      <header class="release-head">
+        <div class="repo"><div class="repo-name">{{if .AvatarURL}}<img src="{{.AvatarURL}}" alt="" loading="lazy">{{else}}<span class="avatar">{{initial .Repo}}</span>{{end}}<a href="https://github.com/{{.Repo}}" target="_blank" rel="noreferrer">{{.Repo}}</a></div>{{if .Description}}<p>{{.Description}}</p>{{end}}</div>
+        <div class="release-meta">
+          <time datetime="{{.PublishedAt.Format "2006-01-02T15:04:05Z07:00"}}" title="{{.Date}}">{{.Ago}}</time>
+          <details class="release-actions">
+            <summary aria-label="Actions for {{.Repo}}" title="Repository actions"><svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 4 18"><circle cx="2" cy="3" r="1.5"></circle><circle cx="2" cy="9" r="1.5"></circle><circle cx="2" cy="15" r="1.5"></circle></svg></summary>
+            <div class="action-menu">
+              <p>Hide all releases from this repository. You can restore it on the Excluded page.</p>
+              <form action="/exclusions" method="post" hx-post="/exclusions" hx-swap="none">
+                <input type="hidden" name="csrf" value="{{$.CSRFToken}}">
+                <input type="hidden" name="repo" value="{{.Repo}}">
+                <input type="hidden" name="next" value="/">
+                <button class="exclude-button" type="submit">Exclude repository</button>
+              </form>
+            </div>
+          </details>
+        </div>
+      </header>
+      <div class="release-title"><div><span class="version">{{.Version}}</span>{{if and .Name (ne .Name .Version)}}<h2>{{.Name}}</h2>{{end}}</div></div>
+      {{if .BodyHTML}}<div class="changelog collapsed">{{.BodyHTML}}</div><div class="release-footer"><button class="expand" type="button" aria-expanded="false">Show full changelog <span>⌄</span></button><a class="github-link" href="{{.URL}}" target="_blank" rel="noreferrer">View release <span>↗</span></a></div>{{else}}<div class="release-footer"><p class="empty">No release notes.</p><a class="github-link" href="{{.URL}}" target="_blank" rel="noreferrer">View release <span>↗</span></a></div>{{end}}
+    </div>
+  </article>
+  {{end}}
+{{if lt .CurrentPage .TotalPages}}
+<div class="load-more">
+  <a class="load-more-link" href="/?page={{.NextPage}}&amp;q={{.Query | urlquery}}" hx-get="/?page={{.NextPage}}&amp;q={{.Query | urlquery}}&amp;fragment=releases" hx-trigger="intersect once, click" hx-target="closest .load-more" hx-select="unset" hx-swap="outerHTML" hx-sync="#release-page:replace">Load more releases <span aria-hidden="true">↓</span></a>
+  <p class="load-status" role="status">Loading more releases…</p>
+  <p class="load-error" role="status" hidden>Could not load releases. Choose “Load more” to retry.</p>
+</div>
+{{else}}<p class="timeline-end" role="status">You’re all caught up · End of the last {{.WindowDays}} days{{if .Query}} matching your search{{end}}</p>{{end}}
+{{end}}
