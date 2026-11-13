@@ -47,7 +47,7 @@
   {{end}}
 {{if lt .CurrentPage .TotalPages}}
 <div class="load-more">
-  <a class="load-more-link" href="/?page={{.NextPage}}&amp;q={{.Query | urlquery}}" hx-get="/?page={{.NextPage}}&amp;q={{.Query | urlquery}}&amp;fragment=releases" hx-trigger="intersect once, click" hx-target="closest .load-more" hx-select="unset" hx-swap="outerHTML" hx-sync="#release-page:replace">Load more releases <span aria-hidden="true">↓</span></a>
+  <a class="load-more-link" href="/?page={{.NextPage}}&amp;q={{.Query | urlquery}}" hx-get="/?page={{.NextPage}}&amp;q={{.Query | urlquery}}&amp;fragment=releases" hx-trigger="intersect once, click" hx-target="closest .load-more" hx-swap="outerHTML" hx-sync="#release-page:replace">Load more releases <span aria-hidden="true">↓</span></a>
   <p class="load-status" role="status">Loading more releases…</p>
   <p class="load-error" role="status" hidden>Could not load releases. Choose “Load more” to retry.</p>
 </div>
