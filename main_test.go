@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -13,6 +14,30 @@ import (
 	"testing"
 	"time"
 )
+
+func TestServeHTTPGracefulShutdown(t *testing.T) {
+	server := &http.Server{Addr: "127.0.0.1:0"}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serveHTTP(ctx, server, time.Second) }()
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("serveHTTP() = %v, want nil", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("serveHTTP did not stop after cancellation")
+	}
+}
+
+func TestServeHTTPPreservesListenError(t *testing.T) {
+	server := &http.Server{Addr: "invalid address"}
+	if err := serveHTTP(context.Background(), server, time.Second); err == nil {
+		t.Fatal("serveHTTP() = nil, want listen error")
+	}
+}
 
 func TestNormalizeRepo(t *testing.T) {
 	for input, want := range map[string]string{
