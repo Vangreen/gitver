@@ -52,6 +52,48 @@ func TestGitHubDoesNotCacheResponses(t *testing.T) {
 	}
 }
 
+func TestFetchRepoReleasesContinuesPastOldPage(t *testing.T) {
+	old := time.Now().UTC().AddDate(0, 0, -windowDays-1).Format(time.RFC3339)
+	recent := time.Now().UTC().Format(time.RFC3339)
+	var oldPage strings.Builder
+	oldPage.WriteByte('[')
+	for i := 0; i < 100; i++ {
+		if i > 0 {
+			oldPage.WriteByte(',')
+		}
+		if i%3 == 0 {
+			fmt.Fprintf(&oldPage, `{"tag_name":"draft-%d","draft":true,"published_at":null}`, i)
+		} else {
+			fmt.Fprintf(&oldPage, `{"tag_name":"old-%d","published_at":%q}`, i, old)
+		}
+	}
+	oldPage.WriteByte(']')
+	var requests []string
+	a := &app{client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests = append(requests, request.URL.String())
+		switch request.URL.Query().Get("page") {
+		case "1":
+			return mockResponse(http.StatusOK, oldPage.String()), nil
+		case "2":
+			return mockResponse(http.StatusOK, fmt.Sprintf(`[{"tag_name":"recent","published_at":%q}]`, recent)), nil
+		default:
+			t.Fatalf("unexpected releases page: %s", request.URL)
+			return nil, nil
+		}
+	})}}
+
+	got, hasAny, err := a.fetchRepoReleases(t.Context(), repository{Name: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasAny || len(got) != 1 || got[0].Version != "recent" {
+		t.Fatalf("releases = %+v, empty = %v; want recent release and empty=false", got, hasAny)
+	}
+	if len(requests) != 2 {
+		t.Fatalf("requests = %v; want pages 1 and 2", requests)
+	}
+}
+
 func TestGitHubRetryDelay(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
 	for _, test := range []struct {
@@ -67,6 +109,7 @@ func TestGitHubRetryDelay(t *testing.T) {
 		{name: "longest", retryAfter: "60", remaining: "0", reset: fmt.Sprint(now.Unix() + 30), want: time.Minute},
 		{name: "invalid", retryAfter: "bad", want: time.Minute},
 		{name: "past", retryAfter: now.Add(-time.Second).Format(http.TimeFormat), want: time.Minute},
+		{name: "pathological retry after", retryAfter: "2147483647", want: maxGitHubRetryDelay},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			headers := make(http.Header)
@@ -77,6 +120,28 @@ func TestGitHubRetryDelay(t *testing.T) {
 				t.Fatalf("delay = %s, want %s", got, test.want)
 			}
 		})
+	}
+}
+
+func TestGitHubRateLimitOnFinalAttemptWaitsCancellably(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var calls atomic.Int32
+	a := &app{client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		call := calls.Add(1)
+		response := mockResponse(http.StatusTooManyRequests, `{"message":"slow down"}`)
+		response.Header.Set("Retry-After", "1")
+		if call == maxRetries {
+			time.AfterFunc(20*time.Millisecond, cancel)
+		}
+		return response, nil
+	})}}
+	_, err := a.githubRequest(ctx, http.MethodGet, githubAPI, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("final rate-limit wait should be cancellable, got %v", err)
+	}
+	if calls.Load() != maxRetries {
+		t.Fatalf("calls = %d, want %d", calls.Load(), maxRetries)
 	}
 }
 

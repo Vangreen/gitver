@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -14,17 +15,49 @@ import (
 	"time"
 )
 
+func TestServeHTTPGracefulShutdown(t *testing.T) {
+	server := &http.Server{Addr: "127.0.0.1:0"}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serveHTTP(ctx, server, time.Second) }()
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("serveHTTP() = %v, want nil", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("serveHTTP did not stop after cancellation")
+	}
+}
+
+func TestServeHTTPPreservesListenError(t *testing.T) {
+	server := &http.Server{Addr: "invalid address"}
+	if err := serveHTTP(context.Background(), server, time.Second); err == nil {
+		t.Fatal("serveHTTP() = nil, want listen error")
+	}
+}
+
 func TestNormalizeRepo(t *testing.T) {
 	for input, want := range map[string]string{
-		"Owner/Repo":   "owner/repo",
-		" owner/repo/": "owner/repo",
+		"Owner/Repo":               "owner/repo",
+		" owner/repo/":             "owner/repo",
+		"valid-owner/repo_name.v1": "valid-owner/repo_name.v1",
+		"a1/9-b._":                 "a1/9-b._",
 	} {
 		got, ok := normalizeRepo(input)
 		if !ok || got != want {
 			t.Errorf("normalizeRepo(%q) = %q, %v; want %q, true", input, got, ok, want)
 		}
 	}
-	for _, input := range []string{"owner", "owner/repo/extra", "owner/re po", ""} {
+	for _, input := range []string{
+		"owner", "owner/repo/extra", "owner/re po", "",
+		"-owner/repo", "owner-/repo", "owner--name/repo", "owner.name/repo",
+		"owner/repo?query", "owner/repo#fragment", "owner/repo%2fother", "owner\\name/repo",
+		"owner/../repo", "owner/.", "owner/..", "../repo", "owner//repo",
+		strings.Repeat("a", 40) + "/repo", "owner/" + strings.Repeat("a", 101),
+	} {
 		if _, ok := normalizeRepo(input); ok {
 			t.Errorf("normalizeRepo(%q) should be invalid", input)
 		}
@@ -62,6 +95,60 @@ func TestFetchRepoReleasesMarksSuccessfulEmptyResponse(t *testing.T) {
 func TestTimeAgo(t *testing.T) {
 	if got := timeAgo(time.Now().Add(-48 * time.Hour)); got != "2 days ago" {
 		t.Fatalf("timeAgo() = %q, want %q", got, "2 days ago")
+	}
+}
+
+func TestMarkdownResolvesRelativeImagesAgainstGitHubReleaseURL(t *testing.T) {
+	markdown := newMarkdown()
+	for _, test := range []struct {
+		name, source, base, want string
+	}{
+		{
+			name: "relative image", source: `![screenshot](images/screenshot.png)`,
+			base: "https://github.com/owner/repo/releases/tag/v1.2.3",
+			want: `src="https://github.com/owner/repo/releases/tag/images/screenshot.png"`,
+		},
+		{
+			name: "absolute external image unchanged", source: `![image](https://example.com/image.png)`,
+			base: "https://github.com/owner/repo/releases/tag/v1.2.3",
+			want: `src="https://example.com/image.png"`,
+		},
+		{
+			name: "non-GitHub base leaves relative image unchanged", source: `![image](image.png)`,
+			base: "https://example.com/releases/v1",
+			want: `src="image.png"`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var rendered strings.Builder
+			if err := markdown.Convert([]byte(test.source), &rendered, test.base); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(rendered.String(), test.want) {
+				t.Errorf("rendered Markdown = %q, want it to contain %q", rendered.String(), test.want)
+			}
+		})
+	}
+}
+
+func TestSecurityHeadersAllowGitHubReleaseImages(t *testing.T) {
+	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	policy := response.Header().Get("Content-Security-Policy")
+	imgSrc := ""
+	for _, directive := range strings.Split(policy, ";") {
+		fields := strings.Fields(directive)
+		if len(fields) > 0 && fields[0] == "img-src" {
+			imgSrc = strings.Join(fields[1:], " ")
+			break
+		}
+	}
+	if want := "'self' https://avatars.githubusercontent.com https://github.com data:"; imgSrc != want {
+		t.Errorf("img-src = %q, want exactly %q", imgSrc, want)
 	}
 }
 
@@ -211,6 +298,39 @@ func TestReleaseTimeline(t *testing.T) {
 			}
 			if test.wantQuery != "" && !strings.Contains(body, test.wantQuery) {
 				t.Errorf("response does not contain encoded query %q", test.wantQuery)
+			}
+		})
+	}
+}
+
+func TestReleaseLinkOnlyRendersWhenURLIsPresent(t *testing.T) {
+	tmpl, err := template.New("layout.html").Funcs(template.FuncMap{
+		"initial":     func(value string) string { return "R" },
+		"reasonLabel": func(value string) string { return value },
+	}).ParseFS(assets, "views/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{tmpl: tmpl, markdown: newMarkdown()}
+	for _, test := range []struct {
+		name, url, want string
+	}{
+		{name: "URL absent", want: ""},
+		{name: "URL present", url: "https://github.com/owner/repo/releases/tag/v1", want: `<a class="github-link" href="https://github.com/owner/repo/releases/tag/v1"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a.cache.Releases = []Release{{Repo: "owner/repo", Version: "v1", URL: test.url, PublishedAt: time.Now()}}
+			response := httptest.NewRecorder()
+			a.index(response, httptest.NewRequest(http.MethodGet, "/", nil))
+			body := response.Body.String()
+			if strings.Contains(body, `href=""`) {
+				t.Fatal("rendered an empty release link")
+			}
+			if test.want == "" && strings.Contains(body, `class="github-link"`) {
+				t.Fatal("rendered a release action without a URL")
+			}
+			if test.want != "" && !strings.Contains(body, test.want) {
+				t.Fatalf("response missing release link %q", test.want)
 			}
 		})
 	}

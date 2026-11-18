@@ -15,11 +15,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/yuin/goldmark/v2/ast"
@@ -31,13 +33,14 @@ import (
 )
 
 const (
-	windowDays     = 14
-	pageSize       = 20
-	githubGraphQL  = "https://api.github.com/graphql"
-	githubAPI      = "https://api.github.com"
-	maxRetries     = 3
-	scanWorkers    = 10
-	emptyRepoRetry = 7 * 24 * time.Hour
+	windowDays      = 14
+	pageSize        = 20
+	githubGraphQL   = "https://api.github.com/graphql"
+	githubAPI       = "https://api.github.com"
+	maxRetries      = 3
+	scanWorkers     = 10
+	emptyRepoRetry  = 7 * 24 * time.Hour
+	shutdownTimeout = 10 * time.Second
 )
 
 //go:embed views/*.html static/*
@@ -172,9 +175,9 @@ type pageData struct {
 
 type graphResponse struct {
 	Data struct {
-		Viewer struct {
-			Starred struct {
-				PageInfo struct {
+		Viewer *struct {
+			Starred *struct {
+				PageInfo *struct {
 					HasNextPage bool   `json:"hasNextPage"`
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
@@ -203,6 +206,15 @@ type githubRelease struct {
 }
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx); err != nil {
+		log.Printf("server: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
 	tmpl, err := template.New("layout.html").Funcs(template.FuncMap{
 		"initial": func(s string) string {
 			if s != "" {
@@ -218,7 +230,7 @@ func main() {
 		},
 	}).ParseFS(assets, "views/*.html")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	a := &app{
@@ -250,7 +262,33 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("GitVer listening on %s (manual scans only)", server.Addr)
-	log.Fatal(server.ListenAndServe())
+	return serveHTTP(ctx, server, shutdownTimeout)
+}
+
+func serveHTTP(ctx context.Context, server *http.Server, timeout time.Duration) error {
+	serveResult := make(chan error, 1)
+	go func() { serveResult <- server.ListenAndServe() }()
+
+	select {
+	case err := <-serveResult:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		_ = server.Close()
+		return err
+	}
+	err := <-serveResult
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func (a *app) index(w http.ResponseWriter, r *http.Request) {
@@ -380,6 +418,11 @@ func (a *app) addExclusion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Lock()
+	previousCache := a.cache
+	previousCache.Exclusions = append([]Exclusion(nil), a.cache.Exclusions...)
+	previousCache.Releases = append([]Release(nil), a.cache.Releases...)
+	previousLastError := a.lastError
+	previousEdit, hadPreviousEdit := a.exclusionEdits[repo]
 	if a.syncing {
 		a.exclusionEdits[repo] = true
 	}
@@ -404,6 +447,17 @@ func (a *app) addExclusion(w http.ResponseWriter, r *http.Request) {
 	a.cache.Releases = keptReleases
 	a.lastError = ""
 	err := a.saveCacheLocked()
+	if err != nil {
+		a.cache = previousCache
+		a.lastError = previousLastError
+		if a.syncing {
+			if hadPreviousEdit {
+				a.exclusionEdits[repo] = previousEdit
+			} else {
+				delete(a.exclusionEdits, repo)
+			}
+		}
+	}
 	excludedCount := len(a.cache.Exclusions)
 	releaseCount := len(a.cache.Releases)
 	a.mu.Unlock()
@@ -434,6 +488,10 @@ func (a *app) removeExclusion(w http.ResponseWriter, r *http.Request) {
 	excludedCount := 0
 	if ok {
 		a.mu.Lock()
+		previousCache := a.cache
+		previousCache.Exclusions = append([]Exclusion(nil), a.cache.Exclusions...)
+		previousCache.Releases = append([]Release(nil), a.cache.Releases...)
+		previousEdit, hadPreviousEdit := a.exclusionEdits[repo]
 		if a.syncing {
 			a.exclusionEdits[repo] = false
 		}
@@ -445,6 +503,16 @@ func (a *app) removeExclusion(w http.ResponseWriter, r *http.Request) {
 		}
 		a.cache.Exclusions = kept
 		err := a.saveCacheLocked()
+		if err != nil {
+			a.cache = previousCache
+			if a.syncing {
+				if hadPreviousEdit {
+					a.exclusionEdits[repo] = previousEdit
+				} else {
+					delete(a.exclusionEdits, repo)
+				}
+			}
+		}
 		excludedCount = len(a.cache.Exclusions)
 		a.mu.Unlock()
 		if err != nil {
@@ -654,6 +722,18 @@ func (a *app) fetchStarred(ctx context.Context) ([]repository, error) {
 		if len(graph.Errors) > 0 {
 			return nil, fmt.Errorf("GitHub API: %s", graph.Errors[0].Message)
 		}
+		if graph.Data.Viewer == nil {
+			return nil, errors.New("GitHub response is missing data.viewer")
+		}
+		if graph.Data.Viewer.Starred == nil {
+			return nil, errors.New("GitHub response is missing data.viewer.starredRepositories")
+		}
+		if graph.Data.Viewer.Starred.PageInfo == nil {
+			return nil, errors.New("GitHub response is missing data.viewer.starredRepositories.pageInfo")
+		}
+		if graph.Data.Viewer.Starred.Nodes == nil {
+			return nil, errors.New("GitHub response is missing data.viewer.starredRepositories.nodes")
+		}
 		for _, node := range graph.Data.Viewer.Starred.Nodes {
 			repos = append(repos, repository{Name: node.NameWithOwner, Description: node.Description, AvatarURL: node.Owner.AvatarURL})
 		}
@@ -686,19 +766,17 @@ func (a *app) fetchRepoReleases(ctx context.Context, repo repository) ([]Release
 			break
 		}
 		hasAny = true
-		allOld := true
 		for _, release := range batch {
 			if release.Draft || release.PublishedAt.IsZero() || release.PublishedAt.Before(cutoff) {
 				continue
 			}
-			allOld = false
 			releases = append(releases, Release{
 				Repo: repo.Name, Description: repo.Description, AvatarURL: repo.AvatarURL,
 				Version: release.TagName, Name: release.Name, Body: release.Body,
 				URL: release.HTMLURL, PublishedAt: release.PublishedAt,
 			})
 		}
-		if len(batch) < 100 || allOld {
+		if len(batch) < 100 {
 			break
 		}
 	}
@@ -736,12 +814,34 @@ func normalizeRepo(raw string) (string, bool) {
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	for _, part := range parts {
-		if strings.ContainsAny(part, " \\?#%") {
-			return "", false
-		}
+	if !validRepoOwner(parts[0]) || !validRepoName(parts[1]) {
+		return "", false
 	}
 	return strings.ToLower(raw), true
+}
+
+func validRepoOwner(owner string) bool {
+	if len(owner) > 39 || owner[0] == '-' || owner[len(owner)-1] == '-' || strings.Contains(owner, "--") {
+		return false
+	}
+	for _, r := range owner {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func validRepoName(name string) bool {
+	if len(name) > 100 || name == "." || name == ".." {
+		return false
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeToken(raw string) string {
@@ -816,7 +916,7 @@ func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https://avatars.githubusercontent.com data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https://avatars.githubusercontent.com https://github.com data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }

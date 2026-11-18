@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -70,6 +72,34 @@ func TestEmptyRepositoryRecheck(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFetchStarredRejectsIncompleteGraphQLPayloads(t *testing.T) {
+	for _, body := range []string{
+		`{"data":{}}`,
+		`{"data":{"viewer":{}}}`,
+		`{"data":{"viewer":{"starredRepositories":{"nodes":[],"pageInfo":null}}}}`,
+		`{"data":{"viewer":{"starredRepositories":{"pageInfo":{"hasNextPage":false}}}}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			a := &app{client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return mockResponse(http.StatusOK, body), nil
+			})}}
+			if repos, err := a.fetchStarred(t.Context()); err == nil || repos != nil {
+				t.Fatalf("expected incomplete response error, got repos=%+v err=%v", repos, err)
+			}
+		})
+	}
+}
+
+func TestFetchStarredAcceptsZeroStars(t *testing.T) {
+	a := &app{client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return mockResponse(http.StatusOK, `{"data":{"viewer":{"starredRepositories":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`), nil
+	})}}
+	repos, err := a.fetchStarred(t.Context())
+	if err != nil || len(repos) != 0 {
+		t.Fatalf("expected valid empty star list, got repos=%+v err=%v", repos, err)
 	}
 }
 
@@ -197,6 +227,53 @@ func TestManualExclusionPinsAnAutomaticExclusion(t *testing.T) {
 	a.addExclusion(response, request)
 	if response.Code != http.StatusSeeOther || len(a.cache.Exclusions) != 1 || a.cache.Exclusions[0].Reason != "manual" {
 		t.Fatalf("manual exclusion must not expire: %+v, status=%d", a.cache.Exclusions, response.Code)
+	}
+}
+
+func TestExclusionSaveFailureRestoresState(t *testing.T) {
+	for _, action := range []string{"add", "remove"} {
+		t.Run(action, func(t *testing.T) {
+			dir := t.TempDir()
+			blocker := filepath.Join(dir, "not-a-directory")
+			if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			initial := []Exclusion(nil)
+			if action == "remove" {
+				initial = []Exclusion{{Repo: "owner/repo", Reason: "manual", CreatedAt: time.Now()}}
+			}
+			a := &app{
+				csrfToken: "csrf", cachePath: filepath.Join(blocker, "releases.json"), syncing: true,
+				cache: cache{
+					Releases:   []Release{{Repo: "owner/repo", Version: "v1"}},
+					Exclusions: initial,
+				},
+				exclusionEdits: map[string]bool{"owner/repo": action == "remove"},
+			}
+			before := a.cache
+			before.Releases = append([]Release(nil), a.cache.Releases...)
+			before.Exclusions = append([]Exclusion(nil), a.cache.Exclusions...)
+			beforeEdits := map[string]bool{"owner/repo": action == "remove"}
+
+			form := url.Values{"csrf": {"csrf"}, "repo": {"owner/repo"}}
+			request := httptest.NewRequest(http.MethodPost, "/exclusions", strings.NewReader(form.Encode()))
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			response := httptest.NewRecorder()
+			if action == "add" {
+				a.addExclusion(response, request)
+			} else {
+				a.removeExclusion(response, request)
+			}
+			if response.Code != http.StatusInternalServerError {
+				t.Fatalf("expected save failure, got %d", response.Code)
+			}
+			if !reflect.DeepEqual(a.cache, before) {
+				t.Fatalf("cache changed after failed save: got %+v, want %+v", a.cache, before)
+			}
+			if !reflect.DeepEqual(a.exclusionEdits, beforeEdits) {
+				t.Fatalf("scan edit markers changed after failed save: got %v, want %v", a.exclusionEdits, beforeEdits)
+			}
+		})
 	}
 }
 

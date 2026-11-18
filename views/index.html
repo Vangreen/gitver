@@ -41,7 +41,7 @@
         </div>
       </header>
       <div class="release-title"><div><span class="version">{{.Version}}</span>{{if and .Name (ne .Name .Version)}}<h2>{{.Name}}</h2>{{end}}</div></div>
-      {{if .BodyHTML}}<div class="changelog collapsed">{{.BodyHTML}}</div><div class="release-footer"><button class="expand" type="button" aria-expanded="false">Show full changelog <span>⌄</span></button><a class="github-link" href="{{.URL}}" target="_blank" rel="noreferrer">View release <span>↗</span></a></div>{{else}}<div class="release-footer"><p class="empty">No release notes.</p><a class="github-link" href="{{.URL}}" target="_blank" rel="noreferrer">View release <span>↗</span></a></div>{{end}}
+      {{if .BodyHTML}}<div class="changelog collapsed">{{.BodyHTML}}</div><div class="release-footer"><button class="expand" type="button" aria-expanded="false">Show full changelog <span>⌄</span></button>{{if .URL}}<a class="github-link" href="{{.URL}}" target="_blank" rel="noreferrer">View release <span>↗</span></a>{{end}}</div>{{else}}<div class="release-footer"><p class="empty">No release notes.</p>{{if .URL}}<a class="github-link" href="{{.URL}}" target="_blank" rel="noreferrer">View release <span>↗</span></a>{{end}}</div>{{end}}
     </div>
   </article>
   {{end}}

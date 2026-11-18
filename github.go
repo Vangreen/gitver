@@ -19,6 +19,8 @@ type scanMetrics struct {
 	Retries  int
 }
 
+const maxGitHubRetryDelay = 24 * time.Hour
+
 func (a *app) githubRequest(ctx context.Context, method, endpoint string, payload []byte) ([]byte, error) {
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if err := a.waitForGitHub(ctx, endpoint); err != nil {
@@ -58,6 +60,9 @@ func (a *app) githubRequest(ctx context.Context, method, endpoint string, payloa
 			}
 			now := time.Now()
 			limited := isRateLimited(resp.StatusCode, resp.Header, body)
+			if limited {
+				delay = githubRetryDelay(resp.Header, now, time.Minute*time.Duration(1<<attempt))
+			}
 			if limited || resp.Header.Get("X-RateLimit-Remaining") == "0" {
 				fallback := time.Minute * time.Duration(1<<attempt)
 				resource := ""
@@ -68,6 +73,11 @@ func (a *app) githubRequest(ctx context.Context, method, endpoint string, payloa
 			}
 			if resp.StatusCode == http.StatusOK {
 				return body, nil
+			}
+			if attempt == maxRetries-1 && limited {
+				if err := waitForContext(ctx, delay); err != nil {
+					return nil, err
+				}
 			}
 			if (!limited && !isTransientStatus(resp.StatusCode)) || attempt == maxRetries-1 {
 				return nil, fmt.Errorf("GitHub returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
@@ -115,7 +125,10 @@ func githubRetryDelay(headers http.Header, now time.Time, fallback time.Duration
 		}
 	}
 	if delay <= 0 {
-		return fallback
+		delay = fallback
+	}
+	if delay > maxGitHubRetryDelay {
+		return maxGitHubRetryDelay
 	}
 	return delay
 }
