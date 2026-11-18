@@ -65,6 +65,60 @@ func TestTimeAgo(t *testing.T) {
 	}
 }
 
+func TestMarkdownResolvesRelativeImagesAgainstGitHubReleaseURL(t *testing.T) {
+	markdown := newMarkdown()
+	for _, test := range []struct {
+		name, source, base, want string
+	}{
+		{
+			name: "relative image", source: `![screenshot](images/screenshot.png)`,
+			base: "https://github.com/owner/repo/releases/tag/v1.2.3",
+			want: `src="https://github.com/owner/repo/releases/tag/images/screenshot.png"`,
+		},
+		{
+			name: "absolute external image unchanged", source: `![image](https://example.com/image.png)`,
+			base: "https://github.com/owner/repo/releases/tag/v1.2.3",
+			want: `src="https://example.com/image.png"`,
+		},
+		{
+			name: "non-GitHub base leaves relative image unchanged", source: `![image](image.png)`,
+			base: "https://example.com/releases/v1",
+			want: `src="image.png"`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var rendered strings.Builder
+			if err := markdown.Convert([]byte(test.source), &rendered, test.base); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(rendered.String(), test.want) {
+				t.Errorf("rendered Markdown = %q, want it to contain %q", rendered.String(), test.want)
+			}
+		})
+	}
+}
+
+func TestSecurityHeadersAllowGitHubReleaseImages(t *testing.T) {
+	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	policy := response.Header().Get("Content-Security-Policy")
+	imgSrc := ""
+	for _, directive := range strings.Split(policy, ";") {
+		fields := strings.Fields(directive)
+		if len(fields) > 0 && fields[0] == "img-src" {
+			imgSrc = strings.Join(fields[1:], " ")
+			break
+		}
+	}
+	if want := "'self' https://avatars.githubusercontent.com https://github.com data:"; imgSrc != want {
+		t.Errorf("img-src = %q, want exactly %q", imgSrc, want)
+	}
+}
+
 type countingMarkdown struct {
 	markdownConverter
 	calls int
