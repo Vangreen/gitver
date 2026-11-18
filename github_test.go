@@ -67,6 +67,7 @@ func TestGitHubRetryDelay(t *testing.T) {
 		{name: "longest", retryAfter: "60", remaining: "0", reset: fmt.Sprint(now.Unix() + 30), want: time.Minute},
 		{name: "invalid", retryAfter: "bad", want: time.Minute},
 		{name: "past", retryAfter: now.Add(-time.Second).Format(http.TimeFormat), want: time.Minute},
+		{name: "pathological retry after", retryAfter: "2147483647", want: maxGitHubRetryDelay},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			headers := make(http.Header)
@@ -77,6 +78,28 @@ func TestGitHubRetryDelay(t *testing.T) {
 				t.Fatalf("delay = %s, want %s", got, test.want)
 			}
 		})
+	}
+}
+
+func TestGitHubRateLimitOnFinalAttemptWaitsCancellably(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var calls atomic.Int32
+	a := &app{client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		call := calls.Add(1)
+		response := mockResponse(http.StatusTooManyRequests, `{"message":"slow down"}`)
+		response.Header.Set("Retry-After", "1")
+		if call == maxRetries {
+			time.AfterFunc(20*time.Millisecond, cancel)
+		}
+		return response, nil
+	})}}
+	_, err := a.githubRequest(ctx, http.MethodGet, githubAPI, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("final rate-limit wait should be cancellable, got %v", err)
+	}
+	if calls.Load() != maxRetries {
+		t.Fatalf("calls = %d, want %d", calls.Load(), maxRetries)
 	}
 }
 
