@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yuin/goldmark/v2/ast"
 	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	"github.com/yuin/goldmark/v2/renderer"
@@ -85,7 +87,7 @@ type app struct {
 }
 
 type markdownConverter interface {
-	Convert([]byte, io.Writer) error
+	Convert([]byte, io.Writer, string) error
 }
 
 type goldmarkV2 struct {
@@ -103,8 +105,24 @@ func newMarkdown() markdownConverter {
 	}
 }
 
-func (m goldmarkV2) Convert(source []byte, writer io.Writer) error {
+func (m goldmarkV2) Convert(source []byte, writer io.Writer, base string) error {
 	document := m.parser.Parse(source)
+	if baseURL, err := url.Parse(base); err == nil && baseURL.IsAbs() {
+		_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+			if !entering {
+				return ast.WalkContinue, nil
+			}
+			image, ok := node.(*ast.Image)
+			if !ok {
+				return ast.WalkContinue, nil
+			}
+			destination, err := url.Parse(string(image.Destination))
+			if err == nil && !destination.IsAbs() && destination.Scheme == "" {
+				image.Destination = []byte(baseURL.ResolveReference(destination).String())
+			}
+			return ast.WalkContinue, nil
+		})
+	}
 	return m.renderer.Render(writer, source, document)
 }
 
@@ -268,7 +286,7 @@ func (a *app) index(w http.ResponseWriter, r *http.Request) {
 	views := make([]releaseView, 0, end-start)
 	for _, release := range releases[start:end] {
 		var rendered bytes.Buffer
-		if err := a.markdown.Convert([]byte(release.Body), &rendered); err != nil {
+		if err := a.markdown.Convert([]byte(release.Body), &rendered, release.URL); err != nil {
 			log.Printf("render markdown for %s %s: %v", release.Repo, release.Version, err)
 		}
 		views = append(views, releaseView{

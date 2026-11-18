@@ -70,9 +70,9 @@ type countingMarkdown struct {
 	calls int
 }
 
-func (markdown *countingMarkdown) Convert(source []byte, writer io.Writer) error {
+func (markdown *countingMarkdown) Convert(source []byte, writer io.Writer, base string) error {
 	markdown.calls++
-	return markdown.markdownConverter.Convert(source, writer)
+	return markdown.markdownConverter.Convert(source, writer, base)
 }
 
 func TestReleaseActionMenuOverridesOatDisclosureStyles(t *testing.T) {
