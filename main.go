@@ -27,6 +27,7 @@ import (
 	"github.com/yuin/goldmark/v2/parser"
 	"github.com/yuin/goldmark/v2/renderer"
 	"github.com/yuin/goldmark/v2/renderer/html"
+	"github.com/yuin/goldmark/v2/text"
 )
 
 const (
@@ -107,7 +108,7 @@ func newMarkdown() markdownConverter {
 
 func (m goldmarkV2) Convert(source []byte, writer io.Writer, base string) error {
 	document := m.parser.Parse(source)
-	if baseURL, err := url.Parse(base); err == nil && baseURL.IsAbs() {
+	if baseURL, err := url.Parse(base); err == nil && baseURL.Scheme == "https" && baseURL.Hostname() == "github.com" {
 		_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 			if !entering {
 				return ast.WalkContinue, nil
@@ -116,9 +117,12 @@ func (m goldmarkV2) Convert(source []byte, writer io.Writer, base string) error 
 			if !ok {
 				return ast.WalkContinue, nil
 			}
-			destination, err := url.Parse(string(image.Destination))
+			destination, err := url.Parse(image.Destination.Str(source))
 			if err == nil && !destination.IsAbs() && destination.Scheme == "" {
-				image.Destination = []byte(baseURL.ResolveReference(destination).String())
+				resolved := baseURL.ResolveReference(destination)
+				if resolved.Hostname() == baseURL.Hostname() {
+					image.Destination = text.NewSingleLineValueFromString(resolved.String(), nil)
+				}
 			}
 			return ast.WalkContinue, nil
 		})
