@@ -175,9 +175,9 @@ type pageData struct {
 
 type graphResponse struct {
 	Data struct {
-		Viewer struct {
-			Starred struct {
-				PageInfo struct {
+		Viewer *struct {
+			Starred *struct {
+				PageInfo *struct {
 					HasNextPage bool   `json:"hasNextPage"`
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
@@ -721,6 +721,18 @@ func (a *app) fetchStarred(ctx context.Context) ([]repository, error) {
 		}
 		if len(graph.Errors) > 0 {
 			return nil, fmt.Errorf("GitHub API: %s", graph.Errors[0].Message)
+		}
+		if graph.Data.Viewer == nil {
+			return nil, errors.New("GitHub response is missing data.viewer")
+		}
+		if graph.Data.Viewer.Starred == nil {
+			return nil, errors.New("GitHub response is missing data.viewer.starredRepositories")
+		}
+		if graph.Data.Viewer.Starred.PageInfo == nil {
+			return nil, errors.New("GitHub response is missing data.viewer.starredRepositories.pageInfo")
+		}
+		if graph.Data.Viewer.Starred.Nodes == nil {
+			return nil, errors.New("GitHub response is missing data.viewer.starredRepositories.nodes")
 		}
 		for _, node := range graph.Data.Viewer.Starred.Nodes {
 			repos = append(repos, repository{Name: node.NameWithOwner, Description: node.Description, AvatarURL: node.Owner.AvatarURL})
