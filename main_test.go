@@ -215,3 +215,36 @@ func TestReleaseTimeline(t *testing.T) {
 		})
 	}
 }
+
+func TestReleaseLinkOnlyRendersWhenURLIsPresent(t *testing.T) {
+	tmpl, err := template.New("layout.html").Funcs(template.FuncMap{
+		"initial":     func(value string) string { return "R" },
+		"reasonLabel": func(value string) string { return value },
+	}).ParseFS(assets, "views/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{tmpl: tmpl, markdown: newMarkdown()}
+	for _, test := range []struct {
+		name, url, want string
+	}{
+		{name: "URL absent", want: ""},
+		{name: "URL present", url: "https://github.com/owner/repo/releases/tag/v1", want: `<a class="github-link" href="https://github.com/owner/repo/releases/tag/v1"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a.cache.Releases = []Release{{Repo: "owner/repo", Version: "v1", URL: test.url, PublishedAt: time.Now()}}
+			response := httptest.NewRecorder()
+			a.index(response, httptest.NewRequest(http.MethodGet, "/", nil))
+			body := response.Body.String()
+			if strings.Contains(body, `href=""`) {
+				t.Fatal("rendered an empty release link")
+			}
+			if test.want == "" && strings.Contains(body, `class="github-link"`) {
+				t.Fatal("rendered a release action without a URL")
+			}
+			if test.want != "" && !strings.Contains(body, test.want) {
+				t.Fatalf("response missing release link %q", test.want)
+			}
+		})
+	}
+}
