@@ -686,19 +686,17 @@ func (a *app) fetchRepoReleases(ctx context.Context, repo repository) ([]Release
 			break
 		}
 		hasAny = true
-		allOld := true
 		for _, release := range batch {
 			if release.Draft || release.PublishedAt.IsZero() || release.PublishedAt.Before(cutoff) {
 				continue
 			}
-			allOld = false
 			releases = append(releases, Release{
 				Repo: repo.Name, Description: repo.Description, AvatarURL: repo.AvatarURL,
 				Version: release.TagName, Name: release.Name, Body: release.Body,
 				URL: release.HTMLURL, PublishedAt: release.PublishedAt,
 			})
 		}
-		if len(batch) < 100 || allOld {
+		if len(batch) < 100 {
 			break
 		}
 	}
