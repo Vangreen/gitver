@@ -380,6 +380,11 @@ func (a *app) addExclusion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Lock()
+	previousCache := a.cache
+	previousCache.Exclusions = append([]Exclusion(nil), a.cache.Exclusions...)
+	previousCache.Releases = append([]Release(nil), a.cache.Releases...)
+	previousLastError := a.lastError
+	previousEdit, hadPreviousEdit := a.exclusionEdits[repo]
 	if a.syncing {
 		a.exclusionEdits[repo] = true
 	}
@@ -404,6 +409,17 @@ func (a *app) addExclusion(w http.ResponseWriter, r *http.Request) {
 	a.cache.Releases = keptReleases
 	a.lastError = ""
 	err := a.saveCacheLocked()
+	if err != nil {
+		a.cache = previousCache
+		a.lastError = previousLastError
+		if a.syncing {
+			if hadPreviousEdit {
+				a.exclusionEdits[repo] = previousEdit
+			} else {
+				delete(a.exclusionEdits, repo)
+			}
+		}
+	}
 	excludedCount := len(a.cache.Exclusions)
 	releaseCount := len(a.cache.Releases)
 	a.mu.Unlock()
@@ -434,6 +450,10 @@ func (a *app) removeExclusion(w http.ResponseWriter, r *http.Request) {
 	excludedCount := 0
 	if ok {
 		a.mu.Lock()
+		previousCache := a.cache
+		previousCache.Exclusions = append([]Exclusion(nil), a.cache.Exclusions...)
+		previousCache.Releases = append([]Release(nil), a.cache.Releases...)
+		previousEdit, hadPreviousEdit := a.exclusionEdits[repo]
 		if a.syncing {
 			a.exclusionEdits[repo] = false
 		}
@@ -445,6 +465,16 @@ func (a *app) removeExclusion(w http.ResponseWriter, r *http.Request) {
 		}
 		a.cache.Exclusions = kept
 		err := a.saveCacheLocked()
+		if err != nil {
+			a.cache = previousCache
+			if a.syncing {
+				if hadPreviousEdit {
+					a.exclusionEdits[repo] = previousEdit
+				} else {
+					delete(a.exclusionEdits, repo)
+				}
+			}
+		}
 		excludedCount = len(a.cache.Exclusions)
 		a.mu.Unlock()
 		if err != nil {

@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -197,6 +199,53 @@ func TestManualExclusionPinsAnAutomaticExclusion(t *testing.T) {
 	a.addExclusion(response, request)
 	if response.Code != http.StatusSeeOther || len(a.cache.Exclusions) != 1 || a.cache.Exclusions[0].Reason != "manual" {
 		t.Fatalf("manual exclusion must not expire: %+v, status=%d", a.cache.Exclusions, response.Code)
+	}
+}
+
+func TestExclusionSaveFailureRestoresState(t *testing.T) {
+	for _, action := range []string{"add", "remove"} {
+		t.Run(action, func(t *testing.T) {
+			dir := t.TempDir()
+			blocker := filepath.Join(dir, "not-a-directory")
+			if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			initial := []Exclusion(nil)
+			if action == "remove" {
+				initial = []Exclusion{{Repo: "owner/repo", Reason: "manual", CreatedAt: time.Now()}}
+			}
+			a := &app{
+				csrfToken: "csrf", cachePath: filepath.Join(blocker, "releases.json"), syncing: true,
+				cache: cache{
+					Releases:   []Release{{Repo: "owner/repo", Version: "v1"}},
+					Exclusions: initial,
+				},
+				exclusionEdits: map[string]bool{"owner/repo": action == "remove"},
+			}
+			before := a.cache
+			before.Releases = append([]Release(nil), a.cache.Releases...)
+			before.Exclusions = append([]Exclusion(nil), a.cache.Exclusions...)
+			beforeEdits := map[string]bool{"owner/repo": action == "remove"}
+
+			form := url.Values{"csrf": {"csrf"}, "repo": {"owner/repo"}}
+			request := httptest.NewRequest(http.MethodPost, "/exclusions", strings.NewReader(form.Encode()))
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			response := httptest.NewRecorder()
+			if action == "add" {
+				a.addExclusion(response, request)
+			} else {
+				a.removeExclusion(response, request)
+			}
+			if response.Code != http.StatusInternalServerError {
+				t.Fatalf("expected save failure, got %d", response.Code)
+			}
+			if !reflect.DeepEqual(a.cache, before) {
+				t.Fatalf("cache changed after failed save: got %+v, want %+v", a.cache, before)
+			}
+			if !reflect.DeepEqual(a.exclusionEdits, beforeEdits) {
+				t.Fatalf("scan edit markers changed after failed save: got %v, want %v", a.exclusionEdits, beforeEdits)
+			}
+		})
 	}
 }
 
