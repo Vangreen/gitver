@@ -16,15 +16,23 @@ import (
 
 func TestNormalizeRepo(t *testing.T) {
 	for input, want := range map[string]string{
-		"Owner/Repo":   "owner/repo",
-		" owner/repo/": "owner/repo",
+		"Owner/Repo":               "owner/repo",
+		" owner/repo/":             "owner/repo",
+		"valid-owner/repo_name.v1": "valid-owner/repo_name.v1",
+		"a1/9-b._":                 "a1/9-b._",
 	} {
 		got, ok := normalizeRepo(input)
 		if !ok || got != want {
 			t.Errorf("normalizeRepo(%q) = %q, %v; want %q, true", input, got, ok, want)
 		}
 	}
-	for _, input := range []string{"owner", "owner/repo/extra", "owner/re po", ""} {
+	for _, input := range []string{
+		"owner", "owner/repo/extra", "owner/re po", "",
+		"-owner/repo", "owner-/repo", "owner--name/repo", "owner.name/repo",
+		"owner/repo?query", "owner/repo#fragment", "owner/repo%2fother", "owner\\name/repo",
+		"owner/../repo", "owner/.", "owner/..", "../repo", "owner//repo",
+		strings.Repeat("a", 40) + "/repo", "owner/" + strings.Repeat("a", 101),
+	} {
 		if _, ok := normalizeRepo(input); ok {
 			t.Errorf("normalizeRepo(%q) should be invalid", input)
 		}

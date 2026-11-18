@@ -766,12 +766,34 @@ func normalizeRepo(raw string) (string, bool) {
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	for _, part := range parts {
-		if strings.ContainsAny(part, " \\?#%") {
-			return "", false
-		}
+	if !validRepoOwner(parts[0]) || !validRepoName(parts[1]) {
+		return "", false
 	}
 	return strings.ToLower(raw), true
+}
+
+func validRepoOwner(owner string) bool {
+	if len(owner) > 39 || owner[0] == '-' || owner[len(owner)-1] == '-' || strings.Contains(owner, "--") {
+		return false
+	}
+	for _, r := range owner {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func validRepoName(name string) bool {
+	if len(name) > 100 || name == "." || name == ".." {
+		return false
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeToken(raw string) string {
