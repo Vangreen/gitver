@@ -73,6 +73,34 @@ func TestEmptyRepositoryRecheck(t *testing.T) {
 	}
 }
 
+func TestFetchStarredRejectsIncompleteGraphQLPayloads(t *testing.T) {
+	for _, body := range []string{
+		`{"data":{}}`,
+		`{"data":{"viewer":{}}}`,
+		`{"data":{"viewer":{"starredRepositories":{"nodes":[],"pageInfo":null}}}}`,
+		`{"data":{"viewer":{"starredRepositories":{"pageInfo":{"hasNextPage":false}}}}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			a := &app{client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return mockResponse(http.StatusOK, body), nil
+			})}}
+			if repos, err := a.fetchStarred(t.Context()); err == nil || repos != nil {
+				t.Fatalf("expected incomplete response error, got repos=%+v err=%v", repos, err)
+			}
+		})
+	}
+}
+
+func TestFetchStarredAcceptsZeroStars(t *testing.T) {
+	a := &app{client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return mockResponse(http.StatusOK, `{"data":{"viewer":{"starredRepositories":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`), nil
+	})}}
+	repos, err := a.fetchStarred(t.Context())
+	if err != nil || len(repos) != 0 {
+		t.Fatalf("expected valid empty star list, got repos=%+v err=%v", repos, err)
+	}
+}
+
 func TestScanRetainsRecentReleasesOnRepositoryFailure(t *testing.T) {
 	a := &app{client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		if request.URL.String() == githubGraphQL {
