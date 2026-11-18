@@ -15,11 +15,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/yuin/goldmark/v2/ast"
@@ -31,13 +33,14 @@ import (
 )
 
 const (
-	windowDays     = 14
-	pageSize       = 20
-	githubGraphQL  = "https://api.github.com/graphql"
-	githubAPI      = "https://api.github.com"
-	maxRetries     = 3
-	scanWorkers    = 10
-	emptyRepoRetry = 7 * 24 * time.Hour
+	windowDays      = 14
+	pageSize        = 20
+	githubGraphQL   = "https://api.github.com/graphql"
+	githubAPI       = "https://api.github.com"
+	maxRetries      = 3
+	scanWorkers     = 10
+	emptyRepoRetry  = 7 * 24 * time.Hour
+	shutdownTimeout = 10 * time.Second
 )
 
 //go:embed views/*.html static/*
@@ -203,6 +206,15 @@ type githubRelease struct {
 }
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx); err != nil {
+		log.Printf("server: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
 	tmpl, err := template.New("layout.html").Funcs(template.FuncMap{
 		"initial": func(s string) string {
 			if s != "" {
@@ -218,7 +230,7 @@ func main() {
 		},
 	}).ParseFS(assets, "views/*.html")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	a := &app{
@@ -250,7 +262,33 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("GitVer listening on %s (manual scans only)", server.Addr)
-	log.Fatal(server.ListenAndServe())
+	return serveHTTP(ctx, server, shutdownTimeout)
+}
+
+func serveHTTP(ctx context.Context, server *http.Server, timeout time.Duration) error {
+	serveResult := make(chan error, 1)
+	go func() { serveResult <- server.ListenAndServe() }()
+
+	select {
+	case err := <-serveResult:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		_ = server.Close()
+		return err
+	}
+	err := <-serveResult
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func (a *app) index(w http.ResponseWriter, r *http.Request) {
